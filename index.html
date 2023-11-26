@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>COVID-19 Case Rate Map, Washington State by County</title>
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+
+    <!-- Including the Mapbox GL CSS file -->
+    <link href="https://api.mapbox.com/mapbox-gl-js/v2.5.0/mapbox-gl.css" rel="stylesheet">
+
+    <!-- Including the Mapbox GL JS file -->
+    <script src="https://api.mapbox.com/mapbox-gl-js/v2.5.0/mapbox-gl.js"></script>
+
+    <style>
+        /* CSS styles for heading and paragraphs */
+        h2,
+        h3 {
+            margin: 10px;
+            font-size: 18px;
+        }
+
+        h3 {
+            font-size: 16px;
+        }
+
+        p {
+            margin: 10px;
+        }
+
+
+        #map {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            width: 100%;
+            height: 100%;
+        }
+        .map-overlay {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            background: rgba(255, 255, 255, 0.8);
+            border-style: solid;
+            border-width: 1px;
+            border-color: rgba(0, 0, 0, 0.2);
+            margin-left: 20px;
+            font-family: Arial, sans-serif;
+            overflow: auto;
+            border-radius: 3px;
+        }
+
+        #features {
+            top: 0;
+            height: 150px;
+            margin-top: 20px;
+            width: 280px;
+        }
+
+        #legend {
+            padding: 10px;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+            line-height: 18px;
+            height: 210px;
+            margin-bottom: 40px;
+            width: 150px;
+        }
+
+        .legend-key {
+            display: inline-block;
+            border-radius: 20%;
+            width: 10px;
+            height: 10px;
+            margin-right: 5px;
+        }
+
+        .mapboxgl-canvas-container.mapboxgl-interactive,
+        .mapboxgl-ctrl-group button.mapboxgl-ctrl-compass {
+            cursor: unset;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="map"></div>
+    <div class='map-overlay' id='features'>
+        <h2>Cumulative COVID-19 Cases per 10k People, Washington</h2>
+        <div id='text-description'>
+            <p>Hover over a County!</p>
+        </div>
+    </div>
+    <div class='map-overlay' id='legend'></div>
+    <script>
+        // initialize basemmap
+        mapboxgl.accessToken =
+            'pk.eyJ1IjoiamFrb2J6aGFvIiwiYSI6ImNpcms2YWsyMzAwMmtmbG5icTFxZ3ZkdncifQ.P9MBej1xacybKcDN_jehvw';
+        const map = new mapboxgl.Map({
+            container: 'map', 
+            style: 'mapbox://styles/mapbox/light-v10', 
+            zoom: 6, 
+            center: [-120.7401, 47.7511] 
+        });
+
+
+        // Fetch and load COVID-19 GeoJSON data
+        async function loadCovidData() {
+            try {
+                let response = await fetch('assets/wa-covid-data-102521.geojson'); 
+                let covidData = await response.json();
+
+                map.on('load', function () {
+                    map.addSource('covidData', {
+                        type: 'geojson',
+                        data: covidData
+                    });
+
+                    map.addLayer({
+                        'id': 'covidData_layer',
+                        'type': 'fill',
+                        'source': 'covidData',
+                        'paint': {
+                            'fill-color': [
+                                'step',
+                                ['get', 'casePer10k'],
+                                '#FFEDA0',
+                                100,
+                                '#FED976',
+                                300,
+                                '#FEB24C',
+                                600,
+                                '#FD8D3C',
+                                1000,
+                                '#FC4E2A',
+                                1300,
+                                '#E31A1C',
+                                1600,
+                                '#BD0026',
+                                2000,
+                                '#800026'
+                            ],
+                            'fill-outline-color': '#BBBBBB',
+                            'fill-opacity': 0.6
+                        }
+                    });
+
+                    // Legend based on casePer10k data
+                    const layers = [
+                        '0-99',
+                        '100-299',
+                        '300-599',
+                        '600-999',
+                        '1000-1299',
+                        '1300-1599',
+                        '1600-1999',
+                        '2000 and more'
+                    ];
+    
+                    const colors = [
+                        '#FFEDA0',
+                        '#FED976',
+                        '#FEB24C',
+                        '#FD8D3C',
+                        '#FC4E2A',
+                        '#E31A1C',
+                        '#BD0026',
+                        '#800026'
+                    ];
+
+
+                    const legend = document.getElementById('legend');
+                    legend.innerHTML = "<b>COVID-19 Case Rate per 10k</b><br>";
+
+                    layers.forEach((layer, i) => {
+                        const color = colors[i];
+                        const item = document.createElement('div');
+                        const key = document.createElement('span');
+                        key.className = 'legend-key';
+                        key.style.backgroundColor = color;
+
+                        const value = document.createElement('span');
+                        value.innerHTML = `${layer}`;
+                        item.appendChild(key);
+                        item.appendChild(value);
+                        legend.appendChild(item);
+                    });
+
+                    // Show COVID-19 case rate on hover
+                    map.on('mousemove', 'covidData_layer', function (e) {
+                        const county = e.features[0].properties.name;
+                        const caseRate = e.features[0].properties.casePer10k;
+                        const densityText = caseRate ? `${caseRate} cases per 10k people` : 'No data available';
+
+                        document.getElementById('text-description').innerHTML = `<h3>${county}</h3><p><strong>${densityText}</strong></p>`;
+                    });
+
+                    // Reset tooltip content when the mouse leaves the layer
+                    map.on('mouseleave', 'covidData_layer', function () {
+                        document.getElementById('text-description').innerHTML = '<p>Hover over a county!</p>';
+                    });
+                });
+            } catch (error) {
+                console.error('Error loading data:', error);
+            }
+        }
+
+        // Call the function to load COVID-19 GeoJSON data and visualize it on the map
+        loadCovidData();
+    </script>
+</body>
+
+</html>
